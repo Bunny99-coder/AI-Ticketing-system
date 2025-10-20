@@ -34,5 +34,10 @@ func New(dsn string) (*DB, error) {
 		return nil, fmt.Errorf("failed to migrate: %w", err)
 	}
 
+	// In New(), after AutoMigrate(&models.User{})
+	if err := db.AutoMigrate(&models.Ticket{}); err != nil {
+		return nil, fmt.Errorf("failed to migrate: %w", err)
+	}
+
 	return &DB{db}, nil
 }
