@@ -16,6 +16,10 @@ type Ticket struct {
 	User        User      `json:"user" gorm:"foreignKey:UserID;references:ID"` // Optional: Load user on query
 	CreatedAt   time.Time `json:"created_at" gorm:"default:current_timestamp"`
 	UpdatedAt   time.Time `json:"updated_at" gorm:"default:current_timestamp"`
+	Category    string    `json:"category" gorm:"default:''"`    // e.g., "Billing", "Bug"
+	Priority    string    `json:"priority" gorm:"default:'low'"` // "low", "medium", "high"
+	Suggestion  string    `json:"suggestion" gorm:"type:text"`   // AI reply suggestion
+
 }
 
 // CreateTicketRequest for incoming data
