@@ -10,6 +10,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings" // New: For trim
+
+	"github.com/google/uuid"
 )
 
 type AIService interface {
@@ -30,14 +33,8 @@ func NewAIService(repo repository.TicketRepository) AIService {
 }
 
 func (s *aiService) ProcessTicketEvent(event *models.TicketCreatedEvent) error {
-	// Prompt for classification & suggestion
-	prompt := fmt.Sprintf(`Classify this support ticket and suggest an auto-reply.
-
-Title: %s
-Description: %s
-
-Respond with JSON only (no extra text):
-{"category": "Billing|Bug|Feature|Support", "priority": "low|medium|high", "suggestion": "Brief auto-reply for agent (1-2 sentences)"}`, event.Title, event.Description)
+	// Shorter prompt
+	prompt := fmt.Sprintf(`Classify ticket: %s. Description: %s. JSON only: {"category": "Billing|Bug|Feature|Support", "priority": "low|medium|high", "suggestion": "1-2 sentence reply"}`, event.Title, event.Description)
 
 	payload := map[string]interface{}{
 		"contents": []map[string]interface{}{
@@ -48,8 +45,8 @@ Respond with JSON only (no extra text):
 			},
 		},
 		"generationConfig": map[string]interface{}{
-			"temperature":     0.2, // Low for consistent JSON
-			"maxOutputTokens": 150,
+			"temperature":     0.1,
+			"maxOutputTokens": 1000,
 		},
 	}
 	payloadBytes, err := json.Marshal(payload)
@@ -57,8 +54,7 @@ Respond with JSON only (no extra text):
 		return err
 	}
 
-	// Fixed: Use "gemini-1.5-flash" model (free, v1beta supported)
-	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + s.apiKey
+	url := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + s.apiKey
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return err
@@ -87,45 +83,58 @@ Respond with JSON only (no extra text):
 		return fmt.Errorf("failed to parse Gemini response: %w", err)
 	}
 
-	// Fixed: Safe parsing with nil checks
+	// Safe parsing
 	candidatesIface, ok := response["candidates"].(interface{})
 	if !ok || candidatesIface == nil {
 		log.Printf("No candidates in Gemini response: %s", string(body))
-		return fmt.Errorf("no candidates in Gemini response")
+		return s.updateTicketWithDefaults(event.TicketID)
 	}
 	candidates, ok := candidatesIface.([]interface{})
 	if !ok || len(candidates) == 0 {
 		log.Printf("Empty candidates in Gemini response: %s", string(body))
-		return fmt.Errorf("empty candidates in Gemini response")
+		return s.updateTicketWithDefaults(event.TicketID)
 	}
 	candidate := candidates[0].(map[string]interface{})
 	contentIface, ok := candidate["content"].(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("no content in candidate")
+		log.Printf("No content in candidate: %s", string(body))
+		return s.updateTicketWithDefaults(event.TicketID)
 	}
 	partsIface, ok := contentIface["parts"].(interface{})
 	if !ok || partsIface == nil {
-		return fmt.Errorf("no parts in content")
+		log.Printf("No parts in content: %s", string(body))
+		return s.updateTicketWithDefaults(event.TicketID)
 	}
 	parts, ok := partsIface.([]interface{})
 	if !ok || len(parts) == 0 {
-		return fmt.Errorf("empty parts in content")
+		log.Printf("Empty parts in content: %s", string(body))
+		return s.updateTicketWithDefaults(event.TicketID)
 	}
 	part := parts[0].(map[string]interface{})
 	text, ok := part["text"].(string)
 	if !ok {
-		return fmt.Errorf("no text in part")
+		log.Printf("No text in part: %s", string(body))
+		return s.updateTicketWithDefaults(event.TicketID)
 	}
 
-	// Parse JSON from text
+	// Fixed: Strip Markdown backticks and "json" label
+	text = strings.TrimSpace(text)
+	if strings.HasPrefix(text, "```json") {
+		text = strings.TrimPrefix(text, "```json")
+		text = strings.TrimSuffix(text, "```")
+	}
+	text = strings.TrimSpace(text)
+	log.Printf("Cleaned Gemini text: %s", text)
+
+	// Parse JSON from cleaned text
 	var aiResponse struct {
 		Category   string `json:"category"`
 		Priority   string `json:"priority"`
 		Suggestion string `json:"suggestion"`
 	}
 	if err := json.Unmarshal([]byte(text), &aiResponse); err != nil {
-		log.Printf("Failed to parse AI JSON: %v (raw: %s)", err, text)
-		return err
+		log.Printf("Failed to parse AI JSON: %v (raw cleaned: %s)", err, text)
+		return s.updateTicketWithDefaults(event.TicketID)
 	}
 
 	// Fetch and update ticket
@@ -142,5 +151,22 @@ Respond with JSON only (no extra text):
 	}
 
 	log.Printf("AI processed ticket %s: Category=%s, Priority=%s, Suggestion=%s", event.TicketID, aiResponse.Category, aiResponse.Priority, aiResponse.Suggestion)
+	return nil
+}
+
+// Fallback update with defaults if Gemini fails
+func (s *aiService) updateTicketWithDefaults(ticketID uuid.UUID) error {
+	ticket, err := s.repo.GetByID(ticketID)
+	if err != nil {
+		return err
+	}
+	ticket.Category = "Unknown"
+	ticket.Priority = "low"
+	ticket.Suggestion = "Please provide more details for assistance."
+	ticket.Status = "classified"
+	if err := s.repo.Update(ticket); err != nil {
+		return err
+	}
+	log.Printf("AI fallback updated ticket %s with defaults", ticketID)
 	return nil
 }
