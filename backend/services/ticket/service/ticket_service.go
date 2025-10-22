@@ -21,22 +21,17 @@ type TicketService interface {
 }
 
 type ticketService struct {
-	repo   repository.TicketRepository
-	writer *kafka.Writer // Kafka writer for events
+	repo     repository.TicketRepository
+	producer *kafka.Writer // segmentio Writer
 }
 
-// NewTicketService initializes the service with Kafka writer
 func NewTicketService(repo repository.TicketRepository) TicketService {
 	writer := &kafka.Writer{
 		Addr:     kafka.TCP("localhost:9092"),
 		Topic:    "ticket-events",
 		Balancer: &kafka.LeastBytes{},
 	}
-
-	return &ticketService{
-		repo:   repo,
-		writer: writer,
-	}
+	return &ticketService{repo: repo, producer: writer}
 }
 
 func (s *ticketService) Create(req *models.CreateTicketRequest, userID uuid.UUID) (*models.Ticket, error) {
@@ -49,7 +44,7 @@ func (s *ticketService) Create(req *models.CreateTicketRequest, userID uuid.UUID
 		return nil, err
 	}
 
-	// Publish event to Kafka
+	// Publish event with segmentio
 	event := models.TicketCreatedEvent{
 		TicketID:    ticket.ID,
 		UserID:      userID,
@@ -60,14 +55,11 @@ func (s *ticketService) Create(req *models.CreateTicketRequest, userID uuid.UUID
 	eventBytes, err := json.Marshal(event)
 	if err != nil {
 		log.Printf("failed to marshal event: %v", err)
-		return ticket, nil // Don't fail create on event error
+		return ticket, nil
 	}
 
-	err = s.writer.WriteMessages(context.Background(),
-		kafka.Message{
-			Key:   []byte(ticket.ID.String()),
-			Value: eventBytes,
-		},
+	err = s.producer.WriteMessages(context.Background(),
+		kafka.Message{Value: eventBytes},
 	)
 	if err != nil {
 		log.Printf("failed to produce event: %v", err)
@@ -101,6 +93,7 @@ func (s *ticketService) Update(id uuid.UUID, req *models.UpdateTicketRequest, us
 	if ticket.UserID != userID {
 		return nil, fmt.Errorf("unauthorized: not your ticket")
 	}
+	oldStatus := ticket.Status // For event
 	if req.Title != "" {
 		ticket.Title = req.Title
 	}
@@ -113,5 +106,30 @@ func (s *ticketService) Update(id uuid.UUID, req *models.UpdateTicketRequest, us
 	if err := s.repo.Update(ticket); err != nil {
 		return nil, err
 	}
+
+	// Publish updated event if status changed (optional for now)
+	if oldStatus != ticket.Status {
+		event := models.TicketUpdatedEvent{
+			TicketID:  id,
+			UserID:    userID,
+			OldStatus: oldStatus,
+			NewStatus: ticket.Status,
+			UpdatedAt: time.Now().Format(time.RFC3339),
+		}
+		eventBytes, err := json.Marshal(event)
+		if err != nil {
+			log.Printf("failed to marshal updated event: %v", err)
+		} else {
+			err = s.producer.WriteMessages(context.Background(),
+				kafka.Message{Value: eventBytes},
+			)
+			if err != nil {
+				log.Printf("failed to produce updated event: %v", err)
+			} else {
+				log.Println("Published ticket_updated event for ID:", id)
+			}
+		}
+	}
+
 	return ticket, nil
 }
