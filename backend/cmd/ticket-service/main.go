@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ai-ticketing-backend/internal/pkg/metrics"
 	"ai-ticketing-backend/internal/pkg/redis"
 	"ai-ticketing-backend/services/ticket"
 	"ai-ticketing-backend/services/ticket/consumer"
@@ -8,6 +9,7 @@ import (
 	"ai-ticketing-backend/services/ticket/invalidator"
 	"ai-ticketing-backend/services/ticket/middleware"
 	"log"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,6 +20,8 @@ func main() {
 	h := handlers.NewTicketHandlers(svc)
 
 	r := gin.Default()
+	r.Use(metricsMiddleware) // Metrics for requests
+
 	api := r.Group("/api/v1/tickets")
 	api.Use(middleware.AuthMiddleware())
 	{
@@ -27,6 +31,8 @@ func main() {
 		api.PUT("/:id", h.Update)
 	}
 
+	metrics.RegisterMetrics() // /metrics endpoint
+
 	cache := redis.New()
 	go invalidator.StartInvalidator(cache)
 
@@ -34,4 +40,12 @@ func main() {
 	if err := r.Run(":8081"); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
+}
+
+// Metrics middleware
+func metricsMiddleware(c *gin.Context) {
+	start := time.Now()
+	c.Next()
+	duration := time.Since(start).Seconds()
+	metrics.RecordRequest(c.Request.Method, c.FullPath(), c.Writer.Status(), duration)
 }

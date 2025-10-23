@@ -42,7 +42,6 @@ func Setup() TicketService {
 	}
 
 	repo := repository.NewTicketRepository(dbConn)
-	svc := NewTicketService(repo)
-
+	svc := NewTicketService(repo) // Same package—no import
 	return svc
 }
