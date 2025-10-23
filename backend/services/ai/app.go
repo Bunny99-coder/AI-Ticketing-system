@@ -2,16 +2,14 @@ package ai
 
 import (
 	"ai-ticketing-backend/internal/pkg/db"
-	"ai-ticketing-backend/services/ai/consumer"
 	"ai-ticketing-backend/services/ai/repository"
-	"ai-ticketing-backend/services/ai/service"
 	"fmt"
 	"os"
 
 	"github.com/joho/godotenv"
 )
 
-func NewApp() {
+func Setup() AIService {
 	_ = godotenv.Load()
 
 	// DB setup (shared)
@@ -44,8 +42,7 @@ func NewApp() {
 	}
 
 	repo := repository.NewTicketRepository(dbConn)
-	svc := service.NewAIService(repo)
+	svc := NewAIService(repo)
 
-	// Start consumer
-	consumer.StartConsumer(svc)
+	return svc
 }

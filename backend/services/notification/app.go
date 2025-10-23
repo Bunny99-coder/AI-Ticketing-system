@@ -1,17 +1,13 @@
 package notification
 
 import (
-	"ai-ticketing-backend/services/notification/consumer"
-	"ai-ticketing-backend/services/notification/service"
-
 	"github.com/joho/godotenv"
 )
 
-func NewApp() {
+func Setup() NotificationService {
 	_ = godotenv.Load()
 
-	svc := service.NewNotificationService()
+	svc := NewNotificationService()
 
-	// Start consumer
-	consumer.StartConsumer(svc)
+	return svc
 }

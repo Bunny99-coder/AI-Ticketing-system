@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"ai-ticketing-backend/internal/models"
-	"ai-ticketing-backend/services/user/service"
+	service "ai-ticketing-backend/services/user"
 	"net/http"
 	"strings"
 

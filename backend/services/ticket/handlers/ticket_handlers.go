@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"ai-ticketing-backend/internal/models"
-	"ai-ticketing-backend/services/ticket/service"
+	"ai-ticketing-backend/services/ticket"
 	"net/http"
 	"strings"
 
@@ -11,10 +11,10 @@ import (
 )
 
 type TicketHandlers struct {
-	svc service.TicketService
+	svc ticket.TicketService
 }
 
-func NewTicketHandlers(svc service.TicketService) *TicketHandlers {
+func NewTicketHandlers(svc ticket.TicketService) *TicketHandlers {
 	return &TicketHandlers{svc: svc}
 }
 

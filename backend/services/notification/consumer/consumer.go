@@ -2,7 +2,7 @@ package consumer
 
 import (
 	"ai-ticketing-backend/internal/models"
-	"ai-ticketing-backend/services/notification/service"
+	service "ai-ticketing-backend/services/notification"
 	"context"
 	"encoding/json"
 	"log"
@@ -13,7 +13,7 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-func StartConsumer(notifSvc service.NotificationService) {
+func StartConsumer(svc service.NotificationService) {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:  []string{"localhost:9092"},
 		Topic:    "ticket-events",
@@ -39,8 +39,6 @@ func StartConsumer(notifSvc service.NotificationService) {
 				continue
 			}
 			// Filter for updated events
-
-			// In the loop, after ReadMessage
 			var event models.TicketUpdatedEvent
 			if err := json.Unmarshal(msg.Value, &event); err != nil {
 				var createdEvent models.TicketCreatedEvent
@@ -51,7 +49,7 @@ func StartConsumer(notifSvc service.NotificationService) {
 				}
 				continue
 			}
-			if err := notifSvc.SendUpdatedNotification(&event); err != nil {
+			if err := svc.SendUpdatedNotification(&event); err != nil {
 				log.Printf("Failed to send notification for %s: %v", event.TicketID, err)
 			} else {
 				log.Printf("Notification sent for updated ticket %s", event.TicketID)
@@ -59,3 +57,4 @@ func StartConsumer(notifSvc service.NotificationService) {
 		}
 	}
 }
+

@@ -2,7 +2,7 @@ package consumer
 
 import (
 	"ai-ticketing-backend/internal/models"
-	"ai-ticketing-backend/services/ai/service"
+	ai "ai-ticketing-backend/services/ai"
 	"context"
 	"encoding/json"
 	"log"
@@ -13,7 +13,7 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-func StartConsumer(aiSvc service.AIService) {
+func StartConsumer(aiSvc ai.AIService) {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:  []string{"localhost:9092"},
 		Topic:    "ticket-events",

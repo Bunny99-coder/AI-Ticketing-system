@@ -13,7 +13,6 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     hostname: zookeeper
-    container_name: zookeeper
     ports:
       - "2181:2181"
     environment:
@@ -23,7 +22,6 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     hostname: kafka
-    container_name: kafka
     depends_on:
       - zookeeper
     ports:
@@ -38,14 +36,76 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
 
-
-
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data    
+      - redis_data:/data
+
+  user-service:
+    build:
+      context: ..
+      dockerfile: services/user/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ticket_user
+      DB_PASSWORD: ticket123
+      DB_DATABASE: Ticket
+      JWT_SECRET: my-super-secret-2025
+    depends_on:
+      - postgres
+      - redis
+
+  ticket-service:
+    build:
+      context: ..
+      dockerfile: services/ticket/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ticket_user
+      DB_PASSWORD: ticket123
+      DB_DATABASE: Ticket
+      JWT_SECRET: my-super-secret-2025
+      REDIS_ADDR: redis:6379
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+
+  ai-service:
+    build:
+      context: ..
+      dockerfile: services/ai/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ticket_user
+      DB_PASSWORD: ticket123
+      DB_DATABASE: Ticket
+      GEMINI_API_KEY: your_key_here
+      JWT_SECRET: my-super-secret-2025
+    depends_on:
+      - postgres
+      - kafka
+
+  notification-service:
+    build:
+      context: ..
+      dockerfile: services/notification/Dockerfile
+    environment:
+      JWT_SECRET: my-super-secret-2025
+      EMAIL_SENDER: yourgmail@gmail.com
+      EMAIL_PASSWORD: your_app_password
+      EMAIL_RECEIVER: test@example.com
+    depends_on:
+      - kafka
 
 volumes:
   postgres_data:

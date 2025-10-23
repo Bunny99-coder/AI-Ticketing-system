@@ -2,22 +2,14 @@ package user
 
 import (
 	"ai-ticketing-backend/internal/pkg/db"
-	"ai-ticketing-backend/services/user/handlers"
-	"ai-ticketing-backend/services/user/middleware"
 	"ai-ticketing-backend/services/user/repository"
-	"ai-ticketing-backend/services/user/service"
 	"fmt"
 	"os"
 
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
-type App struct {
-	router *gin.Engine
-}
-
-func NewApp() *App {
+func Setup() UserService {
 	// Load .env file (if exists)
 	_ = godotenv.Load() // Ignores errors if no .env
 
@@ -52,25 +44,7 @@ func NewApp() *App {
 	}
 
 	repo := repository.NewUserRepository(dbConn)
-	svc := service.NewUserService(repo)
-	h := handlers.NewUserHandlers(svc)
+	svc := NewUserService(repo)
 
-	r := gin.Default()
-	api := r.Group("/api/v1/users")
-	{
-		api.POST("/register", h.Register)
-		api.POST("/login", h.Login)
-	}
-	protected := r.Group("/api/v1/users")
-	protected.Use(middleware.AuthMiddleware(svc))
-	{
-		protected.GET("/:id", h.GetUser)
-		protected.GET("/", h.ListUsers)
-	}
-
-	return &App{router: r}
-}
-
-func (a *App) Run(addr string) error {
-	return a.router.Run(addr)
+	return svc
 }

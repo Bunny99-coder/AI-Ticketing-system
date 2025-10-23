@@ -4,17 +4,16 @@ import (
 	"net/http"
 
 	"ai-ticketing-backend/internal/models"
-	"ai-ticketing-backend/services/user/service"
-
+	"ai-ticketing-backend/services/user"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 type UserHandlers struct {
-	svc service.UserService
+	svc user.UserService
 }
 
-func NewUserHandlers(svc service.UserService) *UserHandlers {
+func NewUserHandlers(svc user.UserService) *UserHandlers {
 	return &UserHandlers{svc: svc}
 }
 
