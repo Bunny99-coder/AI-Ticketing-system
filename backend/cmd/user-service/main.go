@@ -6,6 +6,7 @@ import (
 	"ai-ticketing-backend/services/user/middleware"
 	"log"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,6 +16,9 @@ func main() {
 	h := handlers.NewUserHandlers(svc)
 
 	r := gin.Default()
+
+	// Add CORS middleware
+	r.Use(cors.Default())
 	api := r.Group("/api/v1/users")
 	{
 		api.POST("/register", h.Register)

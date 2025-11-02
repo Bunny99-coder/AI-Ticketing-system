@@ -2,12 +2,14 @@ package ticket
 
 import (
 	"ai-ticketing-backend/internal/models"
+	"ai-ticketing-backend/internal/pkg/metrics"
 	"ai-ticketing-backend/internal/pkg/redis"
 	"ai-ticketing-backend/services/ticket/repository"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,8 +23,14 @@ type ticketService struct {
 }
 
 func NewTicketService(repo repository.TicketRepository) TicketService {
+
+	broker := os.Getenv("KAFKA_BROKER")
+	if broker == "" {
+		broker = "localhost:9092" // fallback for local dev
+	}
+
 	writer := &kafka.Writer{
-		Addr:     kafka.TCP("localhost:9092"),
+		Addr:     kafka.TCP(broker),
 		Topic:    "ticket-events",
 		Balancer: &kafka.LeastBytes{},
 	}
@@ -35,6 +43,7 @@ func (s *ticketService) Create(req *models.CreateTicketRequest, userID uuid.UUID
 		Title:       req.Title,
 		Description: req.Description,
 		UserID:      userID,
+		Status:      "open", // Explicitly set default status
 	}
 	if err := s.repo.Create(ticket); err != nil {
 		return nil, err
@@ -67,18 +76,26 @@ func (s *ticketService) Create(req *models.CreateTicketRequest, userID uuid.UUID
 }
 
 func (s *ticketService) GetByID(id uuid.UUID, userID uuid.UUID) (*models.Ticket, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // Timeout for safety
+	defer cancel()
+
 	key := "ticket:" + id.String()
-	var ticket *models.Ticket // Fixed: Pointer
+	var ticket *models.Ticket
 	err := s.cache.CacheGet(ctx, key, &ticket)
 	if err == nil {
+		// Cache hit—record metric
+		metrics.RecordCacheHit()
 		log.Println("Cache hit for ticket", id)
 		if ticket.UserID != userID {
 			return nil, fmt.Errorf("unauthorized: not your ticket")
 		}
 		return ticket, nil
 	}
-	// Cache miss—DB fetch
+
+	// Cache miss—record metric and fetch from DB
+	metrics.RecordCacheMiss()
+	log.Println("Cache miss for ticket", id) // Optional debug log
+
 	ticket, err = s.repo.FindByID(id)
 	if err != nil {
 		return nil, err
@@ -86,8 +103,12 @@ func (s *ticketService) GetByID(id uuid.UUID, userID uuid.UUID) (*models.Ticket,
 	if ticket.UserID != userID {
 		return nil, fmt.Errorf("unauthorized: not your ticket")
 	}
+
 	// Cache it (1 hour TTL)
-	s.cache.CacheSet(ctx, key, ticket, time.Hour)
+	if err := s.cache.CacheSet(ctx, key, ticket, time.Hour); err != nil {
+		log.Printf("Failed to cache ticket %s: %v", id, err) // Log but don't fail
+	}
+
 	return ticket, nil
 }
 
@@ -105,6 +126,28 @@ func (s *ticketService) ListByUser(userID uuid.UUID) ([]models.Ticket, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Cache list (5 min TTL)
+	s.cache.CacheSet(ctx, key, tickets, 5*time.Minute)
+	return tickets, nil
+}
+
+// New: ListAll implementation for agents
+func (s *ticketService) ListAll() ([]models.Ticket, error) {
+	ctx := context.Background()
+	key := "tickets:all"
+	var tickets []models.Ticket
+	err := s.cache.CacheGet(ctx, key, &tickets)
+	if err == nil {
+		log.Println("Cache hit for all tickets")
+		return tickets, nil
+	}
+
+	// Cache miss—DB fetch
+	tickets, err = s.repo.ListAll()
+	if err != nil {
+		return nil, err
+	}
+
 	// Cache list (5 min TTL)
 	s.cache.CacheSet(ctx, key, tickets, 5*time.Minute)
 	return tickets, nil

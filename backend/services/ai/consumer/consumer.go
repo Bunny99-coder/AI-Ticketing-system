@@ -8,14 +8,19 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/segmentio/kafka-go"
 )
 
 func StartConsumer(aiSvc ai.AIService) {
+	kafkaBroker := os.Getenv("KAFKA_BROKER")
+	if kafkaBroker == "" {
+		kafkaBroker = "kafka:9092"
+	}
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:  []string{"localhost:9092"},
+		Brokers:  strings.Split(kafkaBroker, ","),
 		Topic:    "ticket-events",
 		GroupID:  "ai-consumer-group",
 		MinBytes: 10e3, // 10KB

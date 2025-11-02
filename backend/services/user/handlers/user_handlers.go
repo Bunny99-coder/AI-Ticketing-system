@@ -42,12 +42,15 @@ func (h *UserHandlers) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := h.svc.Login(&req)
+	token, user, err := h.svc.Login(&req)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	c.JSON(http.StatusOK, gin.H{
+		"token": token,
+		"user":  user,
+	})
 }
 
 // GetUserHandler for GET /api/v1/users/:id (needs JWT middleware later)

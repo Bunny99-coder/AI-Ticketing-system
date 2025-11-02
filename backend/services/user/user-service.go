@@ -55,14 +55,14 @@ func (s *userService) Register(req *models.RegisterRequest) (*models.User, error
 	return user, nil
 }
 
-func (s *userService) Login(req *models.LoginRequest) (string, error) {
+func (s *userService) Login(req *models.LoginRequest) (string, *models.User, error) {
 	user, err := s.repo.FindByEmail(req.Email)
 	if err != nil {
-		return "", errors.New("invalid credentials")
+		return "", nil, errors.New("invalid credentials")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		return "", errors.New("invalid credentials")
+		return "", nil, errors.New("invalid credentials")
 	}
 
 	// Create JWT
@@ -74,10 +74,11 @@ func (s *userService) Login(req *models.LoginRequest) (string, error) {
 
 	tokenString, err := token.SignedString([]byte(s.jwtSecret))
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return tokenString, nil
+	user.Password = "" // Clear password before returning
+	return tokenString, user, nil
 }
 
 func (s *userService) GetUser(id uuid.UUID) (*models.User, error) {

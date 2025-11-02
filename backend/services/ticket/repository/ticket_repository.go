@@ -11,6 +11,7 @@ type TicketRepository interface {
 	Create(ticket *models.Ticket) error
 	FindByID(id uuid.UUID) (*models.Ticket, error)
 	ListByUser(userID uuid.UUID) ([]models.Ticket, error) // User's tickets only
+	ListAll() ([]models.Ticket, error) // New: For agents
 	Update(ticket *models.Ticket) error
 }
 
@@ -38,6 +39,13 @@ func (r *ticketRepository) FindByID(id uuid.UUID) (*models.Ticket, error) {
 func (r *ticketRepository) ListByUser(userID uuid.UUID) ([]models.Ticket, error) {
 	var tickets []models.Ticket
 	err := r.db.Preload("User").Where("user_id = ?", userID).Find(&tickets).Error
+	return tickets, err
+}
+
+// New: ListAll implementation
+func (r *ticketRepository) ListAll() ([]models.Ticket, error) {
+	var tickets []models.Ticket
+	err := r.db.Preload("User").Find(&tickets).Error
 	return tickets, err
 }
 

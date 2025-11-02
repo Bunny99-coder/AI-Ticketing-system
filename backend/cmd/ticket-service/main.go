@@ -11,6 +11,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,16 +20,28 @@ func main() {
 	svc := ticket.Setup()
 	h := handlers.NewTicketHandlers(svc)
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(cors.Default()) // Add CORS middleware
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+	r.SetTrustedProxies(nil)
 	r.Use(metricsMiddleware) // Metrics for requests
 
-	api := r.Group("/api/v1/tickets")
-	api.Use(middleware.AuthMiddleware())
+	// Customer routes
+	customerApi := r.Group("/api/v1/tickets")
+	customerApi.Use(middleware.AuthMiddleware())
 	{
-		api.POST("/", h.Create)
-		api.GET("/:id", h.GetByID)
-		api.GET("/", h.ListByUser)
-		api.PUT("/:id", h.Update)
+		customerApi.POST("/", h.Create)
+		customerApi.GET("/:id", h.GetByID)
+		customerApi.GET("/", h.ListByUser)
+		customerApi.PUT("/:id", h.Update)
+	}
+
+	// Agent routes
+	agentApi := r.Group("/api/v1/agent/tickets")
+	agentApi.Use(middleware.AuthMiddleware(), middleware.AgentAuthMiddleware())
+	{
+		agentApi.GET("/", h.ListAll)
 	}
 
 	metrics.RegisterMetrics() // /metrics endpoint

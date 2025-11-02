@@ -53,3 +53,16 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 	}
 }
+
+// New: AgentAuthMiddleware checks for 'agent' role
+func AgentAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("role")
+		if !exists || role.(string) != "agent" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: Agent role required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}

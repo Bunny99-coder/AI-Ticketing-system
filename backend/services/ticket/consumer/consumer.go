@@ -6,15 +6,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/segmentio/kafka-go"
 )
 
 func StartConsumer() {
+	kafkaBroker := os.Getenv("KAFKA_BROKER")
+	if kafkaBroker == "" {
+		kafkaBroker = "localhost:9092"
+	}
+	log.Printf("KAFKA_BROKER: %s", kafkaBroker)
 	// Kafka reader configuration
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{"localhost:9092"},
+		Brokers: strings.Split(kafkaBroker, ","),
 		GroupID: "ticket-consumer-group",
 		Topic:   "ticket-events",
 		// Set a reasonable timeout for reading messages

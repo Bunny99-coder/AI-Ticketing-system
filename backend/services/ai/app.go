@@ -15,7 +15,7 @@ func Setup() AIService {
 	// DB setup (shared)
 	host := os.Getenv("DB_HOST")
 	if host == "" {
-		host = "127.0.0.1"
+		host = "postgres"
 	}
 	username := os.Getenv("DB_USERNAME")
 	if username == "" {

@@ -1,5 +1,6 @@
 # Stage 1: Build
 FROM golang:1.25-alpine AS builder
+LABEL build-time="2025-11-01T10:28:33Z"
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download

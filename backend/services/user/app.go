@@ -16,7 +16,7 @@ func Setup() UserService {
 	// Load from env with fallbacks (using YOUR var names)
 	host := os.Getenv("DB_HOST")
 	if host == "" {
-		host = "127.0.0.1" // Matches your .env
+		host = "postgres" // Matches your .env
 	}
 	username := os.Getenv("DB_USERNAME")
 	if username == "" {

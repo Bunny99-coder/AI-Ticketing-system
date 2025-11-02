@@ -86,6 +86,16 @@ func (h *TicketHandlers) ListByUser(c *gin.Context) {
 	c.JSON(http.StatusOK, tickets)
 }
 
+// New: ListAll handler for agents
+func (h *TicketHandlers) ListAll(c *gin.Context) {
+	tickets, err := h.svc.ListAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tickets)
+}
+
 // UpdateHandler for PUT /api/v1/tickets/:id
 func (h *TicketHandlers) Update(c *gin.Context) {
 	userIDStr, exists := c.Get("user_id")

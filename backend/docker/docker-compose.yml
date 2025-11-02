@@ -1,5 +1,10 @@
+networks:
+  my-network:
+
 services:
   postgres:
+    networks:
+      - my-network
     image: postgres:15
     environment:
       POSTGRES_DB: Ticket
@@ -9,10 +14,17 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:  # New: Wait for DB ready
+      test: ["CMD-SHELL", "pg_isready -U ticket_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     hostname: zookeeper
+    networks:
+      - my-network
     ports:
       - "2181:2181"
     environment:
@@ -22,6 +34,8 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     hostname: kafka
+    networks:
+      - my-network
     depends_on:
       - zookeeper
     ports:
@@ -30,14 +44,23 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://host.docker.internal:29092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,PLAINTEXT_HOST://:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    healthcheck:  # New: Wait for Kafka ready
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   redis:
     image: redis:7-alpine
+    networks:
+      - my-network
     ports:
       - "6379:6379"
     volumes:
@@ -47,6 +70,8 @@ services:
     build:
       context: ..
       dockerfile: services/user/Dockerfile
+    networks:
+      - my-network
     ports:
       - "8080:8080"
     environment:
@@ -57,13 +82,19 @@ services:
       DB_DATABASE: Ticket
       JWT_SECRET: my-super-secret-2025
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   ticket-service:
     build:
       context: ..
       dockerfile: services/ticket/Dockerfile
+    env_file:
+      - .env
+    networks:
+      - my-network
     ports:
       - "8081:8081"
     environment:
@@ -74,38 +105,51 @@ services:
       DB_DATABASE: Ticket
       JWT_SECRET: my-super-secret-2025
       REDIS_ADDR: redis:6379
+      KAFKA_BROKER: kafka:9092
     depends_on:
-      - postgres
-      - redis
-      - kafka
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_healthy
 
   ai-service:
     build:
       context: ..
       dockerfile: services/ai/Dockerfile
+    env_file:
+      - ../.env
+    networks:
+      - my-network
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: ticket_user
       DB_PASSWORD: ticket123
       DB_DATABASE: Ticket
-      GEMINI_API_KEY: your_key_here
       JWT_SECRET: my-super-secret-2025
+      KAFKA_BROKER: kafka:9092
     depends_on:
-      - postgres
-      - kafka
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   notification-service:
     build:
       context: ..
       dockerfile: services/notification/Dockerfile
+    env_file:
+      - ../.env
+    networks:
+      - my-network
     environment:
       JWT_SECRET: my-super-secret-2025
-      EMAIL_SENDER: yourgmail@gmail.com
-      EMAIL_PASSWORD: your_app_password
-      EMAIL_RECEIVER: test@example.com
+      KAFKA_BROKER: kafka:9092
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
 
 volumes:
   postgres_data:

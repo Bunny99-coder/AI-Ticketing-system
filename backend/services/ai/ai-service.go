@@ -26,6 +26,7 @@ type aiService struct {
 
 func NewAIService(repo repository.TicketRepository) AIService {
 	key := os.Getenv("GEMINI_API_KEY")
+	log.Printf("GEMINI_API_KEY loaded: %s", key)
 	if key == "" {
 		panic("GEMINI_API_KEY not set")
 	}
@@ -33,6 +34,7 @@ func NewAIService(repo repository.TicketRepository) AIService {
 }
 
 func (s *aiService) ProcessTicketEvent(event *models.TicketCreatedEvent) error {
+	log.Printf("ProcessTicketEvent called for ticket ID: %s", event.TicketID)
 	// Shorter prompt
 	prompt := fmt.Sprintf(`Classify ticket: %s. Description: %s. JSON only: {"category": "Billing|Bug|Feature|Support", "priority": "low|medium|high", "suggestion": "1-2 sentence reply"}`, event.Title, event.Description)
 
@@ -62,12 +64,14 @@ func (s *aiService) ProcessTicketEvent(event *models.TicketCreatedEvent) error {
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
+	log.Printf("Making Gemini API call for ticket ID: %s", event.TicketID)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("Gemini API call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	log.Printf("Received Gemini API response for ticket ID: %s, Status: %d", event.TicketID, resp.StatusCode)
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("Gemini error %d: %s", resp.StatusCode, string(body))
