@@ -10,5 +10,5 @@ type TicketService interface {
 	GetByID(id uuid.UUID, userID uuid.UUID) (*models.Ticket, error)
 	ListByUser(userID uuid.UUID) ([]models.Ticket, error)
 	ListAll() ([]models.Ticket, error) // New: For agents
-	Update(id uuid.UUID, req *models.UpdateTicketRequest, userID uuid.UUID) (*models.Ticket, error)
+	Update(id uuid.UUID, req *models.UpdateTicketRequest, userID uuid.UUID, role string) (*models.Ticket, error)
 }

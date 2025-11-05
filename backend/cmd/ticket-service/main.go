@@ -42,6 +42,7 @@ func main() {
 	agentApi.Use(middleware.AuthMiddleware(), middleware.AgentAuthMiddleware())
 	{
 		agentApi.GET("/", h.ListAll)
+		agentApi.GET("/:id", h.GetByID)
 	}
 
 	metrics.RegisterMetrics() // /metrics endpoint

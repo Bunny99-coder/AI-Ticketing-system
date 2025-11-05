@@ -12,8 +12,7 @@ services:
       POSTGRES_PASSWORD: ticket123
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+
     healthcheck:  # New: Wait for DB ready
       test: ["CMD-SHELL", "pg_isready -U ticket_user"]
       interval: 10s
@@ -63,8 +62,7 @@ services:
       - my-network
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
+
 
   user-service:
     build:
@@ -73,7 +71,7 @@ services:
     networks:
       - my-network
     ports:
-      - "8080:8080"
+    - "8080:8080" 
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -91,12 +89,10 @@ services:
     build:
       context: ..
       dockerfile: services/ticket/Dockerfile
-    env_file:
-      - .env
     networks:
       - my-network
     ports:
-      - "8081:8081"
+    - "8081:8081"  
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -150,7 +146,3 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-
-volumes:
-  postgres_data:
-  redis_data:

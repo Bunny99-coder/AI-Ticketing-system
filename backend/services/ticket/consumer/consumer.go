@@ -16,21 +16,20 @@ import (
 func StartConsumer() {
 	kafkaBroker := os.Getenv("KAFKA_BROKER")
 	if kafkaBroker == "" {
-		kafkaBroker = "localhost:9092"
+		// Default to Kafka container hostname when running in Docker
+		kafkaBroker = "kafka:9092"
 	}
 	log.Printf("KAFKA_BROKER: %s", kafkaBroker)
-	// Kafka reader configuration
+
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: strings.Split(kafkaBroker, ","),
-		GroupID: "ticket-consumer-group",
-		Topic:   "ticket-events",
-		// Set a reasonable timeout for reading messages
+		Brokers:  strings.Split(kafkaBroker, ","),
+		GroupID:  "ticket-consumer-group",
+		Topic:    "ticket-events",
 		MinBytes: 10e3, // 10KB
 		MaxBytes: 10e6, // 10MB
 	})
 
 	defer reader.Close()
-
 	fmt.Println("Consuming from topic:", "ticket-events")
 
 	ctx := context.Background()

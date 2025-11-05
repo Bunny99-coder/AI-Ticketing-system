@@ -30,7 +30,7 @@ type CreateTicketRequest struct {
 
 // UpdateTicketRequest for updates
 type UpdateTicketRequest struct {
-	Title       string `json:"title" binding:"omitempty,min=5"`
-	Description string `json:"description" binding:"omitempty,min=10"`
-	Status      string `json:"status" binding:"omitempty,oneof=open in_progress closed"`
+	Title       *string `json:"title,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Status      *string `json:"status,omitempty"`
 }

@@ -6,13 +6,18 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
 
 	"github.com/segmentio/kafka-go"
 )
 
 func StartInvalidator(cache *redis.Client) {
+	kafkaBroker := os.Getenv("KAFKA_BROKER")
+	if kafkaBroker == "" {
+		kafkaBroker = "kafka:9092"
+	}
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:  []string{"localhost:9092"},
+		Brokers:  []string{kafkaBroker},
 		Topic:    "ticket-events",
 		GroupID:  "cache-invalidator-group",
 		MinBytes: 10e3,

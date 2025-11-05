@@ -43,12 +43,9 @@ func (h *TicketHandlers) Create(c *gin.Context) {
 
 // GetByIDHandler for GET /api/v1/tickets/:id
 func (h *TicketHandlers) GetByID(c *gin.Context) {
-	userIDStr, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found in context"})
-		return
-	}
+	userIDStr, _ := c.Get("user_id")
 	userID, _ := userIDStr.(uuid.UUID)
+	role, _ := c.Get("role")
 
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -57,7 +54,14 @@ func (h *TicketHandlers) GetByID(c *gin.Context) {
 		return
 	}
 
-	ticket, err := h.svc.GetByID(id, userID)
+	var ticket *models.Ticket
+	// If the user is an agent, they can get any ticket
+	if role == "agent" {
+		ticket, err = h.svc.GetByID(id, uuid.Nil) // uuid.Nil bypasses ownership check
+	} else {
+		ticket, err = h.svc.GetByID(id, userID)
+	}
+
 	if err != nil {
 		if strings.Contains(err.Error(), "unauthorized") {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -98,12 +102,9 @@ func (h *TicketHandlers) ListAll(c *gin.Context) {
 
 // UpdateHandler for PUT /api/v1/tickets/:id
 func (h *TicketHandlers) Update(c *gin.Context) {
-	userIDStr, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found in context"})
-		return
-	}
+	userIDStr, _ := c.Get("user_id")
 	userID, _ := userIDStr.(uuid.UUID)
+	role, _ := c.Get("role")
 
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -118,7 +119,13 @@ func (h *TicketHandlers) Update(c *gin.Context) {
 		return
 	}
 
-	ticket, err := h.svc.Update(id, &req, userID)
+	// Prevent customers from updating status
+	if role != "agent" && req.Status != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only agents can update ticket status"})
+		return
+	}
+
+	ticket, err := h.svc.Update(id, &req, userID, role.(string))
 	if err != nil {
 		if strings.Contains(err.Error(), "unauthorized") {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})

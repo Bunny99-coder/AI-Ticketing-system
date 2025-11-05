@@ -26,7 +26,7 @@ func NewTicketService(repo repository.TicketRepository) TicketService {
 
 	broker := os.Getenv("KAFKA_BROKER")
 	if broker == "" {
-		broker = "localhost:9092" // fallback for local dev
+		broker = "kafka:9092" // fallback for local dev
 	}
 
 	writer := &kafka.Writer{
@@ -86,7 +86,7 @@ func (s *ticketService) GetByID(id uuid.UUID, userID uuid.UUID) (*models.Ticket,
 		// Cache hit—record metric
 		metrics.RecordCacheHit()
 		log.Println("Cache hit for ticket", id)
-		if ticket.UserID != userID {
+		if userID != uuid.Nil && ticket.UserID != userID {
 			return nil, fmt.Errorf("unauthorized: not your ticket")
 		}
 		return ticket, nil
@@ -100,7 +100,7 @@ func (s *ticketService) GetByID(id uuid.UUID, userID uuid.UUID) (*models.Ticket,
 	if err != nil {
 		return nil, err
 	}
-	if ticket.UserID != userID {
+	if userID != uuid.Nil && ticket.UserID != userID {
 		return nil, fmt.Errorf("unauthorized: not your ticket")
 	}
 
@@ -153,24 +153,33 @@ func (s *ticketService) ListAll() ([]models.Ticket, error) {
 	return tickets, nil
 }
 
-func (s *ticketService) Update(id uuid.UUID, req *models.UpdateTicketRequest, userID uuid.UUID) (*models.Ticket, error) {
+func (s *ticketService) Update(id uuid.UUID, req *models.UpdateTicketRequest, userID uuid.UUID, role string) (*models.Ticket, error) {
 	ticket, err := s.repo.FindByID(id)
 	if err != nil {
 		return nil, err
 	}
-	if ticket.UserID != userID {
+
+	// Agents can update any ticket, customers only their own
+	if role != "agent" && ticket.UserID != userID {
 		return nil, fmt.Errorf("unauthorized: not your ticket")
 	}
+
+	// Only agents can change status
+	if role != "agent" && req.Status != nil && ticket.Status != *req.Status {
+		return nil, fmt.Errorf("unauthorized: only agents can change status")
+	}
+
 	oldStatus := ticket.Status
-	if req.Title != "" {
-		ticket.Title = req.Title
+	if req.Title != nil {
+		ticket.Title = *req.Title
 	}
-	if req.Description != "" {
-		ticket.Description = req.Description
+	if req.Description != nil {
+		ticket.Description = *req.Description
 	}
-	if req.Status != "" {
-		ticket.Status = req.Status
+	if req.Status != nil {
+		ticket.Status = *req.Status
 	}
+
 	if err := s.repo.Update(ticket); err != nil {
 		return nil, err
 	}
@@ -179,6 +188,7 @@ func (s *ticketService) Update(id uuid.UUID, req *models.UpdateTicketRequest, us
 	ctx := context.Background()
 	s.cache.CacheDel(ctx, "ticket:"+id.String())
 	s.cache.CacheDel(ctx, "user_tickets:"+userID.String())
+	s.cache.CacheDel(ctx, "tickets:all") // Invalidate all tickets cache
 
 	// Publish updated event if status changed
 	if oldStatus != ticket.Status {

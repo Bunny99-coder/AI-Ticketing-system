@@ -4,6 +4,7 @@ import (
 	"ai-ticketing-backend/internal/models"
 	"ai-ticketing-backend/services/user/repository"
 	"errors"
+	"log"
 	"os"
 	"time"
 
@@ -29,9 +30,13 @@ func (s *userService) GetJWTSecret() string {
 	return s.jwtSecret
 }
 
+
+
 func (s *userService) Register(req *models.RegisterRequest) (*models.User, error) {
+	log.Printf("Attempting to register user with email: %s", req.Email)
 	// Check if email exists
 	if _, err := s.repo.FindByEmail(req.Email); err == nil {
+		log.Printf("Registration failed: email %s already registered", req.Email)
 		return nil, errors.New("email already registered")
 	}
 
@@ -56,12 +61,15 @@ func (s *userService) Register(req *models.RegisterRequest) (*models.User, error
 }
 
 func (s *userService) Login(req *models.LoginRequest) (string, *models.User, error) {
+	log.Printf("Attempting to login with email: %s", req.Email)
 	user, err := s.repo.FindByEmail(req.Email)
 	if err != nil {
+		log.Printf("Login failed: user with email %s not found", req.Email)
 		return "", nil, errors.New("invalid credentials")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		log.Printf("Login failed: incorrect password for user with email %s", req.Email)
 		return "", nil, errors.New("invalid credentials")
 	}
 
