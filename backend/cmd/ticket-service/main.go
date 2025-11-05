@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Test comment for CI/CD
 func main() {
 	log.Println("Starting Ticket Service on :8081...")
 	svc, dbConn := ticket.Setup()
