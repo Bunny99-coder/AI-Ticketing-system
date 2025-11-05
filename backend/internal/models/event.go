@@ -18,3 +18,12 @@ type TicketUpdatedEvent struct {
 	NewStatus string    `json:"new_status"`
 	UpdatedAt string    `json:"updated_at"`
 }
+
+// TicketContentUpdatedEvent is published when a ticket's content (title or description) is updated by the customer
+type TicketContentUpdatedEvent struct {
+	TicketID    uuid.UUID `json:"ticket_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	UpdatedAt   string    `json:"updated_at"`
+}

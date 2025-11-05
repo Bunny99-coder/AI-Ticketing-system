@@ -238,6 +238,28 @@ func (s *ticketService) CustomerUpdate(id uuid.UUID, req *models.CustomerUpdateT
 		return nil, err
 	}
 
+	// Publish event for AI service
+	event := models.TicketContentUpdatedEvent{
+		TicketID:    ticket.ID,
+		UserID:      ticket.UserID,
+		Title:       ticket.Title,
+		Description: ticket.Description,
+		UpdatedAt:   time.Now().Format(time.RFC3339),
+	}
+	eventBytes, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("failed to marshal content updated event: %v", err)
+	} else {
+		err = s.producer.WriteMessages(context.Background(),
+			kafka.Message{Value: eventBytes},
+		)
+		if err != nil {
+			log.Printf("failed to produce content updated event: %v", err)
+		} else {
+			log.Println("Published ticket_content_updated event for ID:", ticket.ID)
+		}
+	}
+
 	ctx := context.Background()
 	s.cache.CacheDel(ctx, "ticket:"+id.String())
 	s.cache.CacheDel(ctx, "user_tickets:"+userID.String())

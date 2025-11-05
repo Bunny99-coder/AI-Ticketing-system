@@ -29,15 +29,12 @@ func New(dsn string) (*DB, error) {
 		return nil, fmt.Errorf("failed to create UUID extension: %w", err)
 	}
 
-	// Auto-migrate models
-	if err := db.AutoMigrate(&models.User{}); err != nil {
-		return nil, fmt.Errorf("failed to migrate: %w", err)
-	}
-
-	// In New(), after AutoMigrate(&models.User{})
-	if err := db.AutoMigrate(&models.Ticket{}); err != nil {
-		return nil, fmt.Errorf("failed to migrate: %w", err)
-	}
-
 	return &DB{db}, nil
+}
+
+func (db *DB) Migrate() error {
+	if err := db.AutoMigrate(&models.User{}, &models.Ticket{}); err != nil {
+		return fmt.Errorf("failed to migrate: %w", err)
+	}
+	return nil
 }

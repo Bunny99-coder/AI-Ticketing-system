@@ -17,6 +17,7 @@ import (
 
 type AIService interface {
 	ProcessTicketEvent(event *models.TicketCreatedEvent) error
+	ProcessTicketContent(ticketID uuid.UUID, title, description string) error
 }
 
 type aiService struct {
@@ -35,8 +36,13 @@ func NewAIService(repo repository.TicketRepository) AIService {
 
 func (s *aiService) ProcessTicketEvent(event *models.TicketCreatedEvent) error {
 	log.Printf("ProcessTicketEvent called for ticket ID: %s", event.TicketID)
+	return s.ProcessTicketContent(event.TicketID, event.Title, event.Description)
+}
+
+func (s *aiService) ProcessTicketContent(ticketID uuid.UUID, title, description string) error {
+	log.Printf("ProcessTicketContent called for ticket ID: %s", ticketID)
 	// Shorter prompt
-	prompt := fmt.Sprintf(`Classify ticket: %s. Description: %s. JSON only: {"category": "Billing|Bug|Feature|Support", "priority": "low|medium|high", "suggestion": "1-2 sentence reply"}`, event.Title, event.Description)
+	prompt := fmt.Sprintf(`Classify ticket: %s. Description: %s. JSON only: {"category": "Billing|Bug|Feature|Support", "priority": "low|medium|high", "suggestion": "1-2 sentence reply"}`, title, description)
 
 	payload := map[string]interface{}{
 		"contents": []map[string]interface{}{
@@ -64,14 +70,14 @@ func (s *aiService) ProcessTicketEvent(event *models.TicketCreatedEvent) error {
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
-	log.Printf("Making Gemini API call for ticket ID: %s", event.TicketID)
+	log.Printf("Making Gemini API call for ticket ID: %s", ticketID)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("Gemini API call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	log.Printf("Received Gemini API response for ticket ID: %s, Status: %d", event.TicketID, resp.StatusCode)
+	log.Printf("Received Gemini API response for ticket ID: %s, Status: %d", ticketID, resp.StatusCode)
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("Gemini error %d: %s", resp.StatusCode, string(body))
@@ -91,34 +97,34 @@ func (s *aiService) ProcessTicketEvent(event *models.TicketCreatedEvent) error {
 	candidatesIface, ok := response["candidates"].(interface{})
 	if !ok || candidatesIface == nil {
 		log.Printf("No candidates in Gemini response: %s", string(body))
-		return s.updateTicketWithDefaults(event.TicketID)
+		return s.updateTicketWithDefaults(ticketID)
 	}
 	candidates, ok := candidatesIface.([]interface{})
 	if !ok || len(candidates) == 0 {
 		log.Printf("Empty candidates in Gemini response: %s", string(body))
-		return s.updateTicketWithDefaults(event.TicketID)
+		return s.updateTicketWithDefaults(ticketID)
 	}
 	candidate := candidates[0].(map[string]interface{})
 	contentIface, ok := candidate["content"].(map[string]interface{})
 	if !ok {
 		log.Printf("No content in candidate: %s", string(body))
-		return s.updateTicketWithDefaults(event.TicketID)
+		return s.updateTicketWithDefaults(ticketID)
 	}
 	partsIface, ok := contentIface["parts"].(interface{})
 	if !ok || partsIface == nil {
 		log.Printf("No parts in content: %s", string(body))
-		return s.updateTicketWithDefaults(event.TicketID)
+		return s.updateTicketWithDefaults(ticketID)
 	}
 	parts, ok := partsIface.([]interface{})
 	if !ok || len(parts) == 0 {
 		log.Printf("Empty parts in content: %s", string(body))
-		return s.updateTicketWithDefaults(event.TicketID)
+		return s.updateTicketWithDefaults(ticketID)
 	}
 	part := parts[0].(map[string]interface{})
 	text, ok := part["text"].(string)
 	if !ok {
 		log.Printf("No text in part: %s", string(body))
-		return s.updateTicketWithDefaults(event.TicketID)
+		return s.updateTicketWithDefaults(ticketID)
 	}
 
 	// Fixed: Strip Markdown backticks and "json" label
@@ -138,11 +144,11 @@ func (s *aiService) ProcessTicketEvent(event *models.TicketCreatedEvent) error {
 	}
 	if err := json.Unmarshal([]byte(text), &aiResponse); err != nil {
 		log.Printf("Failed to parse AI JSON: %v (raw cleaned: %s)", err, text)
-		return s.updateTicketWithDefaults(event.TicketID)
+		return s.updateTicketWithDefaults(ticketID)
 	}
 
 	// Fetch and update ticket
-	ticket, err := s.repo.GetByID(event.TicketID)
+	ticket, err := s.repo.GetByID(ticketID)
 	if err != nil {
 		return fmt.Errorf("ticket not found: %w", err)
 	}
@@ -154,7 +160,7 @@ func (s *aiService) ProcessTicketEvent(event *models.TicketCreatedEvent) error {
 		return fmt.Errorf("update failed: %w", err)
 	}
 
-	log.Printf("AI processed ticket %s: Category=%s, Priority=%s, Suggestion=%s", event.TicketID, aiResponse.Category, aiResponse.Priority, aiResponse.Suggestion)
+	log.Printf("AI processed ticket %s: Category=%s, Priority=%s, Suggestion=%s", ticketID, aiResponse.Category, aiResponse.Priority, aiResponse.Suggestion)
 	return nil
 }
 

@@ -9,7 +9,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func Setup() TicketService {
+func Setup() (TicketService, *db.DB) {
 	_ = godotenv.Load()
 
 	// DB setup
@@ -43,5 +43,5 @@ func Setup() TicketService {
 
 	repo := repository.NewTicketRepository(dbConn)
 	svc := NewTicketService(repo) // Same package—no import
-	return svc
+	return svc, dbConn
 }

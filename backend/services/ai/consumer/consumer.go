@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -43,16 +44,27 @@ func StartConsumer(aiSvc ai.AIService) {
 				log.Printf("Error reading message: %v", err)
 				continue
 			}
-			var event models.TicketCreatedEvent
-			if err := json.Unmarshal(msg.Value, &event); err != nil {
-				log.Printf("Failed to unmarshal event: %v", err)
+			var createdEvent models.TicketCreatedEvent
+			if err := json.Unmarshal(msg.Value, &createdEvent); err == nil && createdEvent.TicketID != uuid.Nil {
+				if err := aiSvc.ProcessTicketEvent(&createdEvent); err != nil {
+					log.Printf("Failed to process created event %s: %v", createdEvent.TicketID, err)
+				} else {
+					log.Printf("AI processed created ticket %s successfully", createdEvent.TicketID)
+				}
 				continue
 			}
-			if err := aiSvc.ProcessTicketEvent(&event); err != nil {
-				log.Printf("Failed to process event %s: %v", event.TicketID, err)
-			} else {
-				log.Printf("AI processed ticket %s successfully", event.TicketID)
+
+			var contentUpdatedEvent models.TicketContentUpdatedEvent
+			if err := json.Unmarshal(msg.Value, &contentUpdatedEvent); err == nil && contentUpdatedEvent.TicketID != uuid.Nil {
+				if err := aiSvc.ProcessTicketContent(contentUpdatedEvent.TicketID, contentUpdatedEvent.Title, contentUpdatedEvent.Description); err != nil {
+					log.Printf("Failed to process content updated event %s: %v", contentUpdatedEvent.TicketID, err)
+				} else {
+					log.Printf("AI processed content updated ticket %s successfully", contentUpdatedEvent.TicketID)
+				}
+				continue
 			}
+
+			log.Printf("Failed to unmarshal event: %s", string(msg.Value))
 		}
 	}
 }

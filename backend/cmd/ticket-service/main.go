@@ -17,7 +17,10 @@ import (
 
 func main() {
 	log.Println("Starting Ticket Service on :8081...")
-	svc := ticket.Setup()
+	svc, dbConn := ticket.Setup()
+	if err := dbConn.Migrate(); err != nil {
+		log.Fatal("Failed to migrate database:", err)
+	}
 	h := handlers.NewTicketHandlers(svc)
 
 	r := gin.New()
