@@ -34,7 +34,7 @@ func main() {
 		customerApi.POST("/", h.Create)
 		customerApi.GET("/:id", h.GetByID)
 		customerApi.GET("/", h.ListByUser)
-		customerApi.PUT("/:id", h.Update)
+		customerApi.PUT("/:id/customer", h.CustomerUpdate)
 	}
 
 	// Agent routes
@@ -43,6 +43,7 @@ func main() {
 	{
 		agentApi.GET("/", h.ListAll)
 		agentApi.GET("/:id", h.GetByID)
+		agentApi.PUT("/:id", h.Update)
 	}
 
 	metrics.RegisterMetrics() // /metrics endpoint

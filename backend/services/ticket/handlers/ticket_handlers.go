@@ -136,3 +136,32 @@ func (h *TicketHandlers) Update(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, ticket)
 }
+
+func (h *TicketHandlers) CustomerUpdate(c *gin.Context) {
+	userIDStr, _ := c.Get("user_id")
+	userID, _ := userIDStr.(uuid.UUID)
+
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID"})
+		return
+	}
+
+	var req models.CustomerUpdateTicketRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ticket, err := h.svc.CustomerUpdate(id, &req, userID)
+	if err != nil {
+		if strings.Contains(err.Error(), "unauthorized") {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ticket)
+}

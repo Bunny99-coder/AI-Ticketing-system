@@ -159,14 +159,8 @@ func (s *ticketService) Update(id uuid.UUID, req *models.UpdateTicketRequest, us
 		return nil, err
 	}
 
-	// Agents can update any ticket, customers only their own
-	if role != "agent" && ticket.UserID != userID {
-		return nil, fmt.Errorf("unauthorized: not your ticket")
-	}
-
-	// Only agents can change status
-	if role != "agent" && req.Status != nil && ticket.Status != *req.Status {
-		return nil, fmt.Errorf("unauthorized: only agents can change status")
+	if role != "agent" {
+		return nil, fmt.Errorf("unauthorized: only agents can update tickets")
 	}
 
 	oldStatus := ticket.Status
@@ -180,21 +174,23 @@ func (s *ticketService) Update(id uuid.UUID, req *models.UpdateTicketRequest, us
 		ticket.Status = *req.Status
 	}
 
+	if ticket.AgentID == nil {
+		ticket.AgentID = &userID
+	}
+
 	if err := s.repo.Update(ticket); err != nil {
 		return nil, err
 	}
 
-	// Invalidate caches
 	ctx := context.Background()
 	s.cache.CacheDel(ctx, "ticket:"+id.String())
-	s.cache.CacheDel(ctx, "user_tickets:"+userID.String())
-	s.cache.CacheDel(ctx, "tickets:all") // Invalidate all tickets cache
+	s.cache.CacheDel(ctx, "user_tickets:"+ticket.UserID.String())
+	s.cache.CacheDel(ctx, "tickets:all")
 
-	// Publish updated event if status changed
 	if oldStatus != ticket.Status {
 		event := models.TicketUpdatedEvent{
 			TicketID:  id,
-			UserID:    userID,
+			UserID:    ticket.UserID,
 			OldStatus: oldStatus,
 			NewStatus: ticket.Status,
 			UpdatedAt: time.Now().Format(time.RFC3339),
@@ -213,6 +209,39 @@ func (s *ticketService) Update(id uuid.UUID, req *models.UpdateTicketRequest, us
 			}
 		}
 	}
+
+	return ticket, nil
+}
+
+func (s *ticketService) CustomerUpdate(id uuid.UUID, req *models.CustomerUpdateTicketRequest, userID uuid.UUID) (*models.Ticket, error) {
+	ticket, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if ticket.UserID != userID {
+		return nil, fmt.Errorf("unauthorized: not your ticket")
+	}
+
+	if ticket.AgentID != nil {
+		return nil, fmt.Errorf("ticket is already assigned to an agent")
+	}
+
+	if req.Title != nil {
+		ticket.Title = *req.Title
+	}
+	if req.Description != nil {
+		ticket.Description = *req.Description
+	}
+
+	if err := s.repo.Update(ticket); err != nil {
+		return nil, err
+	}
+
+	ctx := context.Background()
+	s.cache.CacheDel(ctx, "ticket:"+id.String())
+	s.cache.CacheDel(ctx, "user_tickets:"+userID.String())
+	s.cache.CacheDel(ctx, "tickets:all")
 
 	return ticket, nil
 }

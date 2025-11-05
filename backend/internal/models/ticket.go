@@ -19,7 +19,7 @@ type Ticket struct {
 	Category    string    `json:"category" gorm:"default:''"`    // e.g., "Billing", "Bug"
 	Priority    string    `json:"priority" gorm:"default:'low'"` // "low", "medium", "high"
 	Suggestion  string    `json:"suggestion" gorm:"type:text"`   // AI reply suggestion
-
+	AgentID     *uuid.UUID `json:"agent_id,omitempty" gorm:"type:uuid"`
 }
 
 // CreateTicketRequest for incoming data
@@ -33,4 +33,10 @@ type UpdateTicketRequest struct {
 	Title       *string `json:"title,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Status      *string `json:"status,omitempty"`
+}
+
+// CustomerUpdateTicketRequest for customer updates
+type CustomerUpdateTicketRequest struct {
+	Title       *string `json:"title,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
