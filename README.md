@@ -19,5 +19,3 @@ Cloud-native backend for support ticketing (Go, Gin, Postgres, Kafka, Gemini, Re
 ## CI/CD
 GitHub Actions: Tests/builds/deploys on push/PR.
 
-## Demo
-[Video link or screenshot]
